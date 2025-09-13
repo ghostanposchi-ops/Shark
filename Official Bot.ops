@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulated Money Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Main Container -->
+    <div class="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full text-center">
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">Simulated Money Bot</h1>
+        <p class="text-gray-500 mb-6">A simple demonstration of a virtual income bot.</p>
+
+        <!-- Balance Display -->
+        <div class="bg-indigo-50 p-6 rounded-xl mb-6">
+            <p class="text-xl text-indigo-700 font-semibold">Your Virtual Balance</p>
+            <p id="balance" class="text-5xl font-extrabold text-indigo-900 mt-2">$0.00</p>
+        </div>
+
+        <!-- Bot Control Section -->
+        <div class="space-y-4">
+            <button id="run-bot-btn"
+                class="w-full py-4 px-6 bg-indigo-600 text-white font-bold text-lg rounded-full shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300 transition-all duration-300">
+                Run Bot!
+            </button>
+            <p id="status-message" class="text-gray-600 text-sm italic h-6"></p>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="mt-8 text-gray-400 text-xs leading-relaxed">
+            <p>This is a simulated application for educational purposes. It does not generate real money and is not connected to any real-world financial system. All values are virtual and for demonstration only.</p>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        const balanceEl = document.getElementById('balance');
+        const statusEl = document.getElementById('status-message');
+        const runBtn = document.getElementById('run-bot-btn');
+
+        let isBotRunning = false;
+        let db, auth, userDocRef;
+
+        const initializeFirebase = async () => {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Sign in with the custom token or anonymously if not available
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                const userId = auth.currentUser?.uid || crypto.randomUUID();
+                const userPath = `/artifacts/${appId}/users/${userId}`;
+                userDocRef = doc(db, userPath, 'virtual-balance');
+
+                // Set up real-time listener for the user's balance
+                onSnapshot(userDocRef, (docSnap) => {
+                    const data = docSnap.data();
+                    const currentBalance = data ? (data.amount || 0) : 0;
+                    balanceEl.textContent = `$${currentBalance.toFixed(2)}`;
+                    runBtn.disabled = false;
+                    isBotRunning = false;
+                    statusEl.textContent = 'Ready.';
+                    runBtn.textContent = 'Run Bot!';
+                }, (error) => {
+                    console.error("Error fetching balance:", error);
+                    statusEl.textContent = "Error loading data.";
+                });
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                statusEl.textContent = "Error initializing application.";
+            }
+        };
+
+        const runBot = async () => {
+            if (isBotRunning) {
+                return;
+            }
+
+            isBotRunning = true;
+            runBtn.disabled = true;
+            statusEl.textContent = 'Bot is working...';
+            runBtn.textContent = 'Bot Running...';
+
+            try {
+                // Get the current balance to increment it
+                const docSnap = await getDoc(userDocRef);
+                const currentData = docSnap.data() || { amount: 0 };
+                const currentBalance = currentData.amount;
+                const earnedAmount = 5 + (Math.random() * 5); // Earn a random amount between $5 and $10
+
+                // Simulate work with a delay
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Update the balance in Firestore
+                await setDoc(userDocRef, { amount: currentBalance + earnedAmount });
+
+                statusEl.textContent = `Task complete! Earned $${earnedAmount.toFixed(2)}.`;
+            } catch (error) {
+                console.error("Failed to run bot:", error);
+                statusEl.textContent = "Bot failed to complete task.";
+                runBtn.disabled = false;
+                isBotRunning = false;
+                runBtn.textContent = 'Run Bot!';
+            }
+        };
+
+        // Event listener for the button
+        runBtn.addEventListener('click', runBot);
+
+        // Initialize Firebase on page load
+        initializeFirebase();
+
+    </script>
+</body>
+</html>
+
